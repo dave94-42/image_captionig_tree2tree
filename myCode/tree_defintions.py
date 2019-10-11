@@ -57,7 +57,7 @@ class TagValue(NodeDefinition.Value):
 
     @staticmethod
     def representation_to_abstract_batch(t:tf.Tensor):
-        idx = tf.math.argmax(t[0])
+        idx = tf.argmax(t[0])
         try:
             ris = shared_list.tags_idx[idx]
         except IndexError:
@@ -85,7 +85,8 @@ class WordValue(NodeDefinition.Value):
     """
     class modelling word value i.e. emebedding vector
     """
-    representation_shape = 0 #dimension of embedding currently used
+    representation_shape = 0    #word number in dataset
+    embedding_size=0    #embedding dimension
     class_value = True
 
     @staticmethod
@@ -93,8 +94,12 @@ class WordValue(NodeDefinition.Value):
         WordValue.representation_shape = shape
 
     @staticmethod
+    def set_embedding_size(embedding_dim):
+        WordValue.embedding_size=embedding_dim
+
+    @staticmethod
     def representation_to_abstract_batch(t:tf.Tensor):
-        idx = tf.math.argmax(t[0])
+        idx = tf.argmax(t[0])
         try:
             ris = shared_list.word_idx[idx]
         except IndexError:

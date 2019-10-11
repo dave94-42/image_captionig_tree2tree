@@ -134,8 +134,8 @@ class Tree:
         tot_word=0
         matched_word=0
         overlaps_s, overlaps_v,tot_pos,matched_pos,tot_word,matched_word = zip(*[ts1[i].compute_overlaps(ts2[i],tot_pos,matched_pos,tot_word,matched_word,
-                                                                                   also_values=also_values,
-                                                                                   skip_leaves_value=skip_leaves_values) for i in range(len(ts1))])
+                                                                                                         also_values=also_values,
+                                                                                                         skip_leaves_value=skip_leaves_values) for i in range(len(ts1))])
 
         overlaps_s_avg = float(np.mean(overlaps_s))
         overlaps_v_avg = float(np.mean(overlaps_v))

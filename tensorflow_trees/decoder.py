@@ -1,11 +1,11 @@
-import tensorflow as tf
 import typing as T
 import itertools
 
 from tensorflow_trees.definition import TreeDefinition, Tree, TrainingTree, NodeDefinition
 from tensorflow_trees.batch import BatchOfTreesForDecoding
 from tensorflow_trees.decoder_cells import GatedFixedArityNodeDecoder, ParallelDense
-
+from myCode.word_processing import *
+from myCode.tree_defintions import WordValue
 
 class DecoderCellsBuilder:
     """ Define interfaces and simple implementations for a cells builder, factory used for the decoder modules.
@@ -76,7 +76,7 @@ class DecoderCellsBuilder:
             size2 = int((size1 + decoder.embedding_size) * hidden_coef)
 
             return tf.keras.Sequential([
-                tf.keras.layers.Dense(300, activation=activation),
+                tf.keras.layers.Dense(150, activation=activation), #orginale era 300!
                 # tf.keras.layers.Dense(200, activation=activation),
                 tf.keras.layers.Dense(output_size[0] * output_size[1]),
                 tf.keras.layers.Lambda(lambda x: tf.reshape(x, [-1, output_size[1]]), output_shape=(output_size[1],))
@@ -156,7 +156,7 @@ class Decoder(tf.keras.Model):
                  tree_def: TreeDefinition = None, embedding_size: int = None,
                  max_depth: int = None, max_arity: int = None, cut_arity: int = None,
                  cellsbuilder: DecoderCellsBuilder = None, max_node_count: int = 1000, take_root_along=True,
-                 variable_arity_strategy="FLAT"):
+                 variable_arity_strategy="FLAT",hidden_word=100):
         """
         :param tree_def:
         :param embedding_size:
@@ -190,6 +190,13 @@ class Decoder(tf.keras.Model):
         self.all_types_idx = {t.id: i for t, i in zip(self.all_types, range(len(self.all_types)))}
 
         self.take_root_along = take_root_along
+
+        self.root_only_in_fist_LSTM_time = False
+        self.emb = tf.keras.layers.Embedding(input_dim=WordValue.representation_shape,
+                                             output_dim=WordValue.embedding_size, name="embedding")
+        self.rnn = tf.keras.layers.LSTM(units=hidden_word, return_state=True, return_sequences=True, name="LSTM")
+        self.final_layer = tf.keras.layers.Dense(WordValue.representation_shape, activation="linear",
+                                             name="final_word_pred_layer")
 
         # if not attr, they don't get registered as variable by the keras model (dunno why)
         for t in tree_def.node_types:
@@ -278,26 +285,34 @@ class Decoder(tf.keras.Model):
 
         # aggregate computations cycle
         while True:
-
-            # get the most requested op
-            op_id = max(all_ops.keys(), key=lambda x: len(all_ops[x]))
+            # first compute all POS tag
+            op_id = "POS_tag"
             node_type = self.all_types[self.all_types_idx[op_id]]
             ops = all_ops.pop(op_id)
             all_ops[op_id] = []
             if len(ops) == 0:
-                break
+                #eventually compute words
+                op_id = "word"
+                node_type = self.all_types[self.all_types_idx[op_id]]
+                try:
+                    ops = all_ops.pop("word")
+                except KeyError:
+                    break
 
             # build the input form the node embeddings
-            inp = tf.gather(batch['embs'], [o.meta['node_numb'] for o in ops])
-            batch_idxs = list(map(lambda x: x.meta['batch_idx'], ops))
+            if op_id=="word":
+                inp,targets,batch_idxs,perm2usort = get_ordered_nodes(batch['embs'],[o for o in ops],TR, batch.decoded_trees)
+            else:
+                inp = tf.gather(batch['embs'], [o.meta['node_numb'] for o in ops])
+                batch_idxs = list(map(lambda x: x.meta['batch_idx'], ops))
 
             # add to the input the 'augmented info'
             if augment_fn is not None:
                 inp = augment_fn(inp, batch_idxs)
 
             # add to the input  the root embedding
-            if self.take_root_along:
-                root_embs = tf.gather(batch.root_embeddings, batch_idxs)
+            root_embs = tf.gather(batch.root_embeddings, batch_idxs)
+            if self.take_root_along and op_id=="POS_tag":
                 inp = tf.concat([inp, root_embs], axis=1)
 
             # add to the input informations about the node type TODO not sure this is needed
@@ -309,8 +324,14 @@ class Decoder(tf.keras.Model):
                 # ops_to_compute_mask = tf.convert_to_tensor(list(map(lambda x: x.value is None, ops)))
                 # not avoid recomputing recursive nodes - looks to be more efficient
 
-                infl = getattr(self, 'value_'+node_type.id)
-                vals = infl.compiled_call(inp)
+                if op_id=="POS_tag":
+                    infl = getattr(self, 'value_'+node_type.id)
+                    vals = infl.compiled_call(inp)
+                else:
+                    vals = words_predictions(self.emb,self.rnn,self.final_layer,batch_idxs,
+                        inp,targets,TR, batch.root_embeddings, self.root_only_in_fist_LSTM_time,perm2usort)
+                    #if current nodes are words, "unsort matrix contaning it i.e. go back to order expected
+                    #by following code
 
                 if TR:
                     new_values = batch.scatter_init_values(node_type, [o.meta['target'].meta['value_numb'] for o in ops], vals)

@@ -21,10 +21,6 @@ class BatchOfTrees:
         self.stores[key] = value
 
     def scatter_update(self, store_key, indeces, values):
-        #print(values.shape)
-        if store_key=="vals_word":
-            a=2
-            #print("word!!!!!!!!!")
         self[store_key] = \
             tf.scatter_nd(tf.reshape(indeces, [-1, 1]), values, self[store_key].shape) + \
             (tf.scatter_nd(tf.reshape(indeces, [-1, 1]), tf.ones([values.shape[0], 1]), (self[store_key].shape[0], 1)) - 1) * -self[store_key]
@@ -209,7 +205,6 @@ class BatchOfTreesForDecoding(BatchOfTrees):
         d_loss = tf.reduce_mean(sample_distrib_error)
 
         v_loss = {}
-        i=0
         for k in value.keys():
             if len(value[k]) > 0 and k not in ignore_values:
                 vt = self.tree_def.id_map[k].value_type

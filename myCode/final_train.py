@@ -1,5 +1,5 @@
 import sys
-sys.path.insert(0,'/home/serramazza/tf_tree')
+sys.path.insert(0,'/home/serramazza/tf_tree_new')
 
 from myCode.models import *
 from myCode.tree_defintions import *
