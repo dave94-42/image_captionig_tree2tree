@@ -2,43 +2,52 @@ from myCode.tree_defintions import *
 from tensorflow_trees.definition import Tree
 import numpy as np
 import tensorflow as tf
+import os
 
-def read_images(imgs_file):
-    """
-    function that read images form file
-    :param imgs_file:
-    :return:
-    """
+def read_images(imgs_dir_file,cnn,tree_cnn_type):
+
     data = []
 
-    #open file and read lines
-    f= open(imgs_file,"r")
-    while True:
-        # create dict
-        dict ={}
+    if cnn==None:
+        #open file and read lines
+        f= open(imgs_dir_file,"r")
+        while True:
+            # create dict
+            dict ={}
 
-        line = f.readline()
-        if line=="":
-            #if i'm here file is ended
-            break
+            line = f.readline()
+            if line=="":
+                #if i'm here file is ended
+                break
 
-        tmp = line.split(sep=":")
+            tmp = line.split(sep=":")
 
-        #fill dict, begin with name
-        dict["name"] = tmp[0][:-1]
+            #fill dict, begin with name
+            dict["name"] = tmp[0][:-1]
+            #remove image name form string and split it
+            line = line[len(dict["name"])+2:]
+            tmp = line.split(sep="data")
 
-        #remove image name form string and split it
-        line = line[len(dict["name"])+2:]
-        tmp = line.split(sep="data")
+            #create a dummy root
+            tree = reconstruct_tree(data, tmp,tree_cnn_type)
+            label_with_node_type(tree, dict["name"])
+            if tree_cnn_type=="inception":
+                tree.node_type_id="root"
+            dict["img_tree"] = tree
 
-        #create a dummy root
-        tree = reconstruct_tree(data, tmp)
-        label_with_node_type(tree, dict["name"])
-
-        dict["img_tree"] = tree
-
-        data.append(dict)
-
+            data.append(dict)
+    else:
+        files = os.listdir(imgs_dir_file)
+        for file in files:
+            name= file[:-4]
+            img = tf.io.read_file(imgs_dir_file+"/"+file)
+            img = tf.image.decode_jpeg(img, channels=3)
+            img = tf.image.resize_images(img,size=(299,299)) #non riesco a fare resize
+            img = tf.keras.applications.inception_v3.preprocess_input(img)
+            img = tf.expand_dims(img,axis=0)
+            batch_features = cnn(img)
+            batch_features = tf.reshape(batch_features,(batch_features.shape[0], -1, batch_features.shape[3]))
+            data.append({"name" : name, "img":batch_features})
     return data
 
 
@@ -60,8 +69,9 @@ def label_with_node_type(tree,name):
         label_with_node_type(child,name)
 
 
-def reconstruct_tree(data, tmp):
-    dummy_root = Tree(node_type_id="dummy", children=[], value=ImageValue(abstract_value=data), meta={'dummy root'})
+def reconstruct_tree(data, tmp,tree_cnn_type):
+    dummy_root = Tree(node_type_id="dummy", children=[], meta={'dummy root'},
+        value=ImageValueAlexNet(abstract_value=data) if tree_cnn_type=="alexnet" else ImageValueInception(abstract_value=data))
     last_node = dummy_root
     parent_node = None
     travesed_node = []
@@ -76,7 +86,8 @@ def reconstruct_tree(data, tmp):
         # if is current node child
         if tmp[i - 1].__contains__("("):
             leaf_n = tmp[i - 1].split("(")
-            new_node = Tree(node_type_id="", children=[], value=ImageValue(abstract_value=data), meta={'label': leaf_n[1]})
+            new_node = Tree(node_type_id="", children=[],meta={'label': leaf_n[1]},
+                value=ImageValueAlexNet(abstract_value=data) if tree_cnn_type=="alexnet" else ImageValueInception(abstract_value=data))
             parent_node = last_node
 
             # update list of all internal node traversed useful later
@@ -93,14 +104,16 @@ def reconstruct_tree(data, tmp):
             parent_node = travesed_node[-1]
 
             leaf_n = tmp[i - 1].split("),")
-            new_node = Tree(node_type_id="leaf", children=[], value=ImageValue(abstract_value=data), meta={'label': leaf_n[1]})
+            new_node = Tree(node_type_id="leaf", children=[], meta={'label': leaf_n[1]},
+            value=ImageValueAlexNet(abstract_value=data) if tree_cnn_type=="alexnet" else ImageValueInception(abstract_value=data))
             parent_node.children.append(new_node)
             last_node = new_node
 
         else:
             # if is current node sibling
             leaf_n = tmp[i - 1].split("],")
-            new_node = Tree(node_type_id="leaf", children=[],value=ImageValue(abstract_value=data), meta={'label': leaf_n[1]})
+            new_node = Tree(node_type_id="leaf", children=[], meta={'label': leaf_n[1]},
+            value=ImageValueAlexNet(abstract_value=data) if tree_cnn_type=="alexnet" else ImageValueInception(abstract_value=data))
             parent_node.children.append(new_node)
             last_node = new_node
 

@@ -1,16 +1,46 @@
 from tensorflow_trees.definition import TreeDefinition, NodeDefinition
 import tensorflow as tf
 import myCode.shared_POS_words_lists as shared_list
-
+import sys
 
 ###########
 #image tree
 ###########
-class ImageValue(NodeDefinition.Value):
+class ImageValueAlexNet(NodeDefinition.Value):
     """
     class modelling single tree image node
     """
-    representation_shape = 384 #this shape come from alexNet
+    representation_shape = 256
+    class_value = False
+
+    @staticmethod
+    def representation_to_abstract_batch(t:tf.Tensor):
+        return t.numpy()
+
+    @staticmethod
+    def abstract_to_representation_batch(v):
+        return tf.Variable(v,dtype=tf.float32)
+
+class ImageValueInception(NodeDefinition.Value):
+    """
+    class modelling single tree image node
+    """
+    representation_shape = 192
+    class_value = False
+
+    @staticmethod
+    def representation_to_abstract_batch(t:tf.Tensor):
+        return t.numpy()
+
+    @staticmethod
+    def abstract_to_representation_batch(v):
+        return tf.Variable(v,dtype=tf.float32)
+
+class ImageValueInceptionRoot(NodeDefinition.Value):
+    """
+    class modelling single tree image node
+    """
+    representation_shape = 2048
     class_value = False
 
     @staticmethod
@@ -26,16 +56,33 @@ class ImageTree:
     """
     class modelling whole image tree
     """
-    def __init__(self):
+    def __init__(self,tree_cnn_type):
 
-        self.tree_def = TreeDefinition(node_types=[
-            NodeDefinition("othersInternal",may_root=True,arity=NodeDefinition.VariableArity(min_value=5),value_type=ImageValue),
-            NodeDefinition("doubleInternal",may_root=True,arity=NodeDefinition.FixedArity(4),value_type=ImageValue),
-            NodeDefinition("internal",may_root=True,arity=NodeDefinition.FixedArity(2),value_type=ImageValue),
-            NodeDefinition("leaf",may_root=False,arity=NodeDefinition.FixedArity(0),value_type=ImageValue)
-        ])
 
-        self.node_types = self.tree_def.node_types
+        if tree_cnn_type=="alexnet":
+
+            self.tree_def = TreeDefinition(node_types=[
+                NodeDefinition("othersInternal",may_root=True,arity=NodeDefinition.VariableArity(min_value=5),value_type=ImageValueAlexNet),
+                NodeDefinition("doubleInternal",may_root=True,arity=NodeDefinition.FixedArity(4),value_type=ImageValueAlexNet),
+                NodeDefinition("internal",may_root=True,arity=NodeDefinition.FixedArity(2),value_type=ImageValueAlexNet),
+                NodeDefinition("leaf",may_root=False,arity=NodeDefinition.FixedArity(0),value_type=ImageValueAlexNet)
+            ])
+
+            self.node_types = self.tree_def.node_types
+
+        elif tree_cnn_type=="inception":
+            self.tree_def = TreeDefinition(node_types=[
+                NodeDefinition("root",may_root=True,arity=NodeDefinition.VariableArity(min_value=2),value_type=ImageValueInceptionRoot),
+                NodeDefinition("othersInternal",may_root=False,arity=NodeDefinition.VariableArity(min_value=5),value_type=ImageValueInception),
+                NodeDefinition("doubleInternal",may_root=False,arity=NodeDefinition.FixedArity(4),value_type=ImageValueInception),
+                NodeDefinition("internal",may_root=False,arity=NodeDefinition.FixedArity(2),value_type=ImageValueInception),
+                NodeDefinition("leaf",may_root=False,arity=NodeDefinition.FixedArity(0),value_type=ImageValueInception)
+            ])
+
+            self.node_types = self.tree_def.node_types
+
+        else:
+            sys.exit("cnn type should be inception or alexnet")
 
 
 
@@ -99,11 +146,11 @@ class WordValue(NodeDefinition.Value):
 
     @staticmethod
     def representation_to_abstract_batch(t:tf.Tensor):
-        idx = tf.argmax(t[0])
+        idx = tf.argmax(t[0]).numpy()
         try:
-            ris = shared_list.word_idx[idx]
+            ris = shared_list.idx_word[idx]
         except IndexError:
-            ris = "not_found"
+            ris = ""
         return ris
 
     @staticmethod
@@ -113,15 +160,15 @@ class WordValue(NodeDefinition.Value):
         :param v:
         :return:
         """
-        if type(v)==list:
-            ris=[]
-            for el in v:
-                idx = shared_list.word_idx.index(el)
-                ris.append( tf.one_hot(idx,WordValue.representation_shape) )
-            return ris
-        else:
-            idx = shared_list.word_idx.index(v)
-            return tf.one_hot(idx,WordValue.representation_shape)
+        #if type(v)==list:
+        ris=[]
+        for el in v:
+            idx = shared_list.word_idx[el]
+            ris.append( tf.one_hot(idx,WordValue.representation_shape) )
+        return ris
+        #else:
+        #    idx = shared_list.word_idx.index(v)
+        #    return tf.one_hot(idx,WordValue.representation_shape)
 
 class SentenceTree:
     """

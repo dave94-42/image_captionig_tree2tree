@@ -6,6 +6,7 @@ from tensorflow_trees.batch import BatchOfTreesForDecoding
 from tensorflow_trees.decoder_cells import GatedFixedArityNodeDecoder, ParallelDense
 from myCode.word_processing import *
 from myCode.tree_defintions import WordValue
+from myCode.RNN_decoder import RNN_Decoder
 
 class DecoderCellsBuilder:
     """ Define interfaces and simple implementations for a cells builder, factory used for the decoder modules.
@@ -156,7 +157,7 @@ class Decoder(tf.keras.Model):
                  tree_def: TreeDefinition = None, embedding_size: int = None,
                  max_depth: int = None, max_arity: int = None, cut_arity: int = None,
                  cellsbuilder: DecoderCellsBuilder = None, max_node_count: int = 1000, take_root_along=True,
-                 variable_arity_strategy="FLAT",hidden_word=100):
+                 variable_arity_strategy="FLAT",hidden_word=100,attention=None):
         """
         :param tree_def:
         :param embedding_size:
@@ -191,12 +192,14 @@ class Decoder(tf.keras.Model):
 
         self.take_root_along = take_root_along
 
-        self.root_only_in_fist_LSTM_time = False
-        self.emb = tf.keras.layers.Embedding(input_dim=WordValue.representation_shape,
-                                             output_dim=WordValue.embedding_size, name="embedding")
-        self.rnn = tf.keras.layers.LSTM(units=hidden_word, return_state=True, return_sequences=True, name="LSTM")
-        self.final_layer = tf.keras.layers.Dense(WordValue.representation_shape, activation="linear",
-                                             name="final_word_pred_layer")
+        self.root_only_in_fist_LSTM_time = True
+        self.attention = attention
+        #self.emb = tf.keras.layers.Embedding(input_dim=WordValue.representation_shape,
+        #                                     output_dim=WordValue.embedding_size, name="embedding")
+        #self.rnn =tf.keras.layers.LSTM(units=hidden_word, return_state=True, return_sequences=True, name="LSTM")
+        #self.final_layer = tf.keras.layers.Dense(WordValue.representation_shape, activation="linear",
+        #                                     name="final_word_pred_layer")
+        self.word_module = RNN_Decoder(WordValue.embedding_size,hidden_word,WordValue.representation_shape)
 
         # if not attr, they don't get registered as variable by the keras model (dunno why)
         for t in tree_def.node_types:
@@ -224,7 +227,7 @@ class Decoder(tf.keras.Model):
     def __call__(self, *,
                  encodings: tf.Tensor = None, targets: T.List[Tree] = None,     # this two lines are mutual exclusive
                  batch: BatchOfTreesForDecoding = None,             #
-                 augment_fn=None):
+                 augment_fn=None,n_it=0):
         """ Batched computation. All fireable operations are grouped according to node kinds and the one single aggregated
         operation is ran. Turned out to give a ~2x speedup.
         :param embeddings: [batch_size, embedding_size]
@@ -236,8 +239,10 @@ class Decoder(tf.keras.Model):
             if encodings is None:
                 raise ValueError("Or batch or xs must be set")
             else:
+                img_embs = encodings
+                if self.attention!=None:
+                    encodings = self.word_module.attention(encodings,tf.zeros(shape=(encodings.shape[0],encodings.shape[2])))
                 batch = BatchOfTreesForDecoding(encodings, self.tree_def, targets)
-
         all_ops = {nt.id: [] for nt in self.all_types}
         TR = batch.target_trees is not None
 
@@ -328,8 +333,8 @@ class Decoder(tf.keras.Model):
                     infl = getattr(self, 'value_'+node_type.id)
                     vals = infl.compiled_call(inp)
                 else:
-                    vals = words_predictions(self.emb,self.rnn,self.final_layer,batch_idxs,
-                        inp,targets,TR, batch.root_embeddings, self.root_only_in_fist_LSTM_time,perm2usort)
+                    vals = words_predictions(self.word_module,batch_idxs,
+                        inp,targets,TR, img_embs, self.root_only_in_fist_LSTM_time,perm2usort,n_it=n_it)
                     #if current nodes are words, "unsort matrix contaning it i.e. go back to order expected
                     #by following code
 

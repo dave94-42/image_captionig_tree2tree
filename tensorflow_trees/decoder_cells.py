@@ -1,7 +1,4 @@
 import tensorflow as tf
-import typing as T
-
-from tensorflow_trees.definition import NodeDefinition
 
 
 class GatedFixedArityNodeDecoder(tf.keras.Model):
