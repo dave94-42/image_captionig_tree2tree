@@ -5,15 +5,6 @@ from tensorflow_trees.decoder import Decoder, DecoderCellsBuilder
 from tensorflow_trees.encoder import Encoder, EncoderCellsBuilder
 
 
-# cut_arity è il numero di nodi che vengono passati direttamente all'encodder flat, se = n l'input n+1 è
-# l'attention applicata a tutti gli altri i   nput
-# variable_arity_strategy se usare flat o altro, forse unica scelta possibile è flat???
-# cell.hidden_coeff regola la dimensione dell'hidden layer, in particolare dim(hidden) = dim(input+output ) ∗ h_coeff,
-# cell.gate è una forma di attenzione, calcola un coefficiente utlizzato in una comb. lineare? per ogni sotto albero
-# questo coeff viene utilizzato come peso nella combinazione lineare
-
-
-
 def get_encoder_decoder(emb_tree_size, cut_arity, hidden_word,max_arity, max_node_count, max_depth, hidden_coeff,
                         activation,emb_word_size,image_tree, sentence_tree):
 
