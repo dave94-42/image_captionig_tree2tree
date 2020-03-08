@@ -110,17 +110,3 @@ def extraxt_topK_words(word_occ,filters):
     WordValue.update_rep_shape(top_k)
     return tokenizer,top_k
 
-
-"""
-def read_tree_from_file(file,embeddings,dictionary,name):
-
-    #open file
-    tree = ET.parse(file)
-    root = tree.getroot()
-    #dummy root
-    dummy = Tree(node_type_id="dummy",children=[],value="dummy")
-    #get tree really read the tree
-    get_tree(dummy, root, dictionary, embeddings,name)
-    #return child of dummy root i.e. the real root
-    return dummy.children[0]
-"""
