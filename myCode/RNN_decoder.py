@@ -1,6 +1,5 @@
 import tensorflow as tf
 from myCode.word_processing import update_matrix
-#TODO unica attention
 
 class BahdanauAttention(tf.keras.Model):
     def __init__(self, units):
@@ -10,16 +9,9 @@ class BahdanauAttention(tf.keras.Model):
         self.V = tf.keras.layers.Dense(1)
 
     def call(self, features, hidden):
-        # features(CNN_encoder output) shape == (batch_size, 64, embedding_dim)
 
-        # hidden shape == (batch_size, hidden_size)
-        # hidden_with_time_axis shape == (batch_size, 1, hidden_size)
         hidden_with_time_axis = tf.expand_dims(hidden, 1)
-
-        # score shape == (batch_size, 64, hidden_size)
         score = tf.nn.tanh(self.W1(features) + self.W2(hidden_with_time_axis))
-
-        # attention_weights shape == (batch_size, 64, 1)
         # you get 1 at the last axis because you are applying score to self.V
         attention_weights = tf.nn.softmax(self.V(score), axis=1)
 
@@ -82,7 +74,7 @@ class RNN_Decoder(tf.keras.Model):
         for i in range(int(features.shape[0])):
             result.append([])
 
-        #sampling of all word in parallel
+        #sampling i-th words of the different captions to generate in parallel
         for i in range(max_length):
             current_parents = tf.expand_dims (parents[:,i,:],axis=1) if parents!=None else None
             predictions, hidden = self.call(dec_input, features, hidden,parents=current_parents)
